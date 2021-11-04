@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c11 -Wall -pedantic -I.
+CFLAGS=-std=c11 -Wall -pedantic -g3 -I.
 NAME=Bash
 
 %.o: %.c
