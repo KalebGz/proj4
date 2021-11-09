@@ -6,7 +6,7 @@ TODO
 
 #include <process.h>
 #include <unistd.h>
-
+int handle_process(const CMD *cmdList);
 /* STRUCTS */
 
 // Stack refactored from proj1
@@ -29,7 +29,7 @@ typedef struct stack
 } Stack;
 
 /*GLOBAL VARIABLES*/
-Stack *DIR_STACK; //Global stack for pushd and popd
+Stack *DIR_STACK = NULL; //Global stack for pushd and popd
 
 Stack *create_stack()
 {
@@ -53,10 +53,37 @@ Node *create_node()
     return n;
 }
 
+bool isEmpty(Stack *s)
+{
+    return (s->Head == NULL);
+}
+
+// Prints string values of the nodes in DIR_STACK
+int print_stack(Stack *s)
+{
+    if (isEmpty(s))
+    {
+        return 1;
+    }
+
+    Node *print_node = s->Head;
+    while (print_node)
+    {
+        (print_node->Next == NULL)? printf("%s", print_node->Str) : printf("%s ", print_node->Str);
+
+        print_node = print_node->Next;
+    }
+    // printf("TEST HEAD:%s ", s->Head->Str);
+    // printf("TEST NEXT: %s ", s->Head->Next->Str);
+    printf("\n");
+    return 0;
+}
+
 void free_node(Node *n)
 {
 
     // free_string(n->Str);
+    free(n->Str);
     free(n);
 }
 
@@ -68,19 +95,23 @@ void free_stack(Stack *s)
     free(s);
 }
 
-bool isEmpty(Stack *s)
-{
-    return (s->Head == NULL);
-}
-
 void stack_push(Stack *st, Node *n)
 {
+    // if(st->Head)
+    // {
+    //     printf("TEST HEAD:%s \n", st->Head->Str);
+    //     // printf("TEST NEXT: %s \n", DIR_STACK->Head->Next->Str);
+    // }
     if (st->Head != NULL)
     {
         n->Next = st->Head;
     }
     st->Head = n;
-    // If Head is Null, make this head and next null
+    // if(st->Head->Next)
+    // {
+    //     printf("TEST HEAD:%s \n", st->Head->Str);
+    //     printf("TEST NEXT: %s \n", st->Head->Next->Str);
+    // }
 }
 
 // Called if head stack node's string is empty
@@ -101,10 +132,11 @@ bool stack_pop(Stack *st)
 
 void push_string_to_stack(char *str, Stack *s)
 {
+
     Node *newNode = create_node();
     // string_putString(newNode->Str, str->Content, str->Size);
     // newNode->Str = (char *)malloc(sizeof(char) * strlen(str));
-    newNode->Str = str;
+    newNode->Str = strdup(str);
     stack_push(s, newNode);
 }
 
@@ -163,20 +195,48 @@ int handle_cd(const CMD *cmdList)
     {
         chdir(getenv("HOME"));
     }
+    return 0;
 }
 
 int handle_pushd(const CMD *cmdList)
 {
     // Node *newNode = create_node();
     // char* current_dir =  // buffer = largest value of size_t(65535)
-    push_string_to_stack(getcwd(getenv("PWD"), 65535), DIR_STACK);
-    push_string_to_stack(getcwd(cmdList->argv[1], strlen(cmdList->argv[1])), DIR_STACK);
+    // char *currDir = getcwd(getenv("PWD"), (size_t) 65535);
 
-    // Change directory directory passed into command
-    if (cmdList->argv[1])
+    // char *paramDir = getcwd(cmdList->argv[1], (size_t)strlen(cmdList->argv[1]));
+    // printf("PWD DIR: %s \n", getenv("PWD"));
+    // printf("CURR DIR: %s \n", currDir);
+    // printf("Param DIR:%s \n", paramDir);
+
+    // push_string_to_stack(currDir, DIR_STACK);
+    if (isEmpty(DIR_STACK))
     {
-        chdir(cmdList->argv[1]);
+        char *currDir = getcwd(getenv("PWD"), PATH_MAX);
+        push_string_to_stack(currDir, DIR_STACK);
     }
+
+    // print_stack(DIR_STACK);
+    // Change directory directory passed into command
+    if (cmdList->argc > 1)
+    {
+        if (chdir(cmdList->argv[1]) < 0)
+        {
+            return 0; // chdir failed
+            perror("chdir");
+        }
+    }
+
+    char *paramDir = getcwd(getenv("PWD"), (size_t)65535);
+    // printf("Param DIR: %s \n", paramDir);
+
+    push_string_to_stack(paramDir, DIR_STACK);
+    // printf("TESTS\n");
+    // printf("TEST HEAD:%s \n", DIR_STACK->Head->Str);
+    // printf("TEST NEXT: %s \n", DIR_STACK->Head->Next->Str);
+    print_stack(DIR_STACK);
+
+    return 0;
 }
 
 int handle_popd()
@@ -191,6 +251,8 @@ int handle_popd()
         chdir(dir_top_stack);
         stack_pop(DIR_STACK);
     }
+    print_stack(DIR_STACK);
+    return 0;
 }
 
 // Handle simple(standard bash commands) and ()
@@ -198,10 +260,24 @@ int handle_simple_sub_cmd(const CMD *cmd)
 {
 
     // Check if commands are built-in pushd {dir}, popd or cd
-    if (strcmp(cmd->argv[0], "cd"))
+    if (cmd->argc > 0)
     {
-        handle_cd(cmd);
+        if (!strcmp(cmd->argv[0], "cd"))
+        {
+            return handle_cd(cmd);
+        }
+
+        if (!strcmp(cmd->argv[0], "pushd"))
+        {
+            return handle_pushd(cmd);
+        }
+
+        if (!strcmp(cmd->argv[0], "popd"))
+        {
+            return handle_popd();
+        }
     }
+
     int status;
     pid_t p = fork();
     if (p < 0)
@@ -371,16 +447,14 @@ int handle_sep_bg(const CMD *cmdList)
         fprintf(stderr, "Backgrounded: %d\n", p); // print to stderr
         // waitpid(p, &status, WUNTRACED);
     }
-    // TODO: return status of right if it exists, otherwise return 0
-    // echo a ; echo b &
-    // printenv ?
+    // return status of right if it exists, otherwise return 0
+   
     return (cmdList->right) ? STATUS(status) : 0;
 }
 
 // Handle ; command
 int handle_sep_end(const CMD *cmdList)
 {
-
     int status_left;
     int status_right;
 
@@ -391,6 +465,8 @@ int handle_sep_end(const CMD *cmdList)
         // Process left node
         exit(handle_process(cmdList->left));
     }
+
+    waitpid(left_p, &status_left, WUNTRACED);
 
     // Process right node if it exists
     if (cmdList->right)
@@ -403,8 +479,6 @@ int handle_sep_end(const CMD *cmdList)
         }
         waitpid(right_p, &status_right, WUNTRACED);
     }
-
-    waitpid(left_p, &status_left, WUNTRACED);
 
     status_right = STATUS(status_right);
     status_left = STATUS(status_left);
@@ -436,22 +510,21 @@ int handle_process(const CMD *cmdList)
     case SEP_END:
         status = handle_sep_end(cmdList);
         break;
-        // case SEP_END:
-        //     status = handle_sep_end(cmdList);
-        //     break;
     }
 
     return status;
 }
 int process(const CMD *cmdList)
 {
-
-    DIR_STACK = create_stack();
+    if (DIR_STACK == NULL)
+    {
+        DIR_STACK = create_stack();
+    }
 
     int status = handle_process(cmdList);
 
+    // reap zombies
     int reap_status;
-    // loop to reap zombies
     int reaped_pid = waitpid(-1, &reap_status, WNOHANG);
     while (reaped_pid > 0)
     {

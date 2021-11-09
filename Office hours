@@ -1,0 +1,7 @@
+Office hours
+
+1. test 7 keeps flipping output here and there, will we be penalized if process take different times to complete
+    - should right sub_end command wait for left to finish(using waitpid) before it starts is process
+2. do the built in directory commands need to fork https://edstem.org/us/courses/8581/discussion/798703
+3. can we write code outside of process.c
+4. How is the directory put in by pushd translated(using getcwd?)
